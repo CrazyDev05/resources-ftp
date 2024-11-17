@@ -1,8 +1,7 @@
 plugins {
     id("maven-publish")
     id("java-gradle-plugin")
-    id("de.crazydev22.resources-ftp") version "1.0.0"
-    kotlin("jvm") version "2.0.20"
+    id("com.gradleup.shadow") version "8.3.5"
 }
 
 group = "de.crazydev22"
@@ -10,14 +9,17 @@ version = "1.0.0"
 
 repositories {
     mavenCentral()
-    gradlePluginPortal()
+    maven("https://raw.github.com/asbachb/mvn-repo/master/releases")
 }
 
+val shadowOnly = configurations.create("shadowOnly")
+
 dependencies {
-    // https://mvnrepository.com/artifact/commons-net/commons-net
-    implementation("commons-net:commons-net:3.11.1")
-    // https://mvnrepository.com/artifact/commons-io/commons-io
-    implementation("commons-io:commons-io:2.17.0")
+    compileOnly("com.github.asbachb:ftp4j:1.7.3")
+    compileOnly("commons-io:commons-io:2.17.0")
+
+    shadowOnly("com.github.asbachb:ftp4j:1.7.3")
+    shadowOnly("commons-io:commons-io:2.17.0")
 }
 
 gradlePlugin {
@@ -29,20 +31,28 @@ gradlePlugin {
     }
 }
 
-kotlin {
-    jvmToolchain(17)
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+}
+
+tasks {
+    shadowJar {
+        archiveClassifier.set(null as String?)
+        dependencies { configurations = listOf(shadowOnly) }
+
+        relocate("org.apache.commons", "de.crazydev22.resourcesftp.commons")
+        relocate("it.sauronsoftware.ftp4j", "de.crazydev22.resourcesftp.ftp4j")
+    }
+
+    named("build") {
+        dependsOn(named("shadowJar"))
+    }
 }
 
 publishing {
     repositories {
         mavenLocal()
-        maven {
-            name = "ftp"
-            url = uri("ftp://138.201.31.117:21")
-            credentials {
-                username = "bob"
-                password = "bob"
-            }
-        }
     }
 }
