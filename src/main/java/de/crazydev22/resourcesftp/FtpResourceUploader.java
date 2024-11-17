@@ -52,6 +52,9 @@ public class FtpResourceUploader implements ExternalResourceUploader {
                 return;
         } catch (FTPIllegalReplyException | FTPAbortedException | FTPDataTransferException | FTPListParseException |
                  FTPException | IOException e) {
+            if (e instanceof FTPException ex && ex.getCode() == 450)
+                return;
+
             throw new ResourceException(parent, String.format("Could not mlist resource '%s'.", parent), e);
         }
 
