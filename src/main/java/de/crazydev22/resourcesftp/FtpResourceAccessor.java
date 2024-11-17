@@ -34,6 +34,8 @@ public class FtpResourceAccessor extends AbstractExternalResourceAccessor implem
                 return new DefaultExternalResourceMetaData(location.getUri(), files[0].getModifiedDate().getTime(), files[0].getSize());
             } catch (FTPIllegalReplyException | FTPAbortedException | FTPDataTransferException | IOException |
                      FTPListParseException | FTPException e) {
+                if (e instanceof FTPException ex && (ex.getCode() == 450 || ex.getCode() == 550))
+                    return null;
                 throw new ResourceException(location.getUri(), "Could not get metadata for resource", e);
             }
         }, true);
