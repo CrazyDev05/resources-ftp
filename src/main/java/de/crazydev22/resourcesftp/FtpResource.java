@@ -28,7 +28,8 @@ public class FtpResource implements ExternalResourceReadResponse {
     @NotNull
     @Override
     public InputStream openStream() throws ResourceException {
-        return new FtpInputStream();
+        stream = new FtpInputStream();
+        return stream;
     }
 
     public URI getURI() {
@@ -64,7 +65,35 @@ public class FtpResource implements ExternalResourceReadResponse {
                     .runWithLock(ftpClient -> {
                 try {
                     PipedOutputStream outputStream = new PipedOutputStream(inputStream);
-                    ftpClient.download(uri.getPath(), outputStream, 0, null);
+                    ftpClient.download(uri.getPath(), outputStream, 0, new FTPDataTransferListener() {
+
+                        @Override
+                        public void started() {}
+
+                        @Override
+                        public void transferred(int length) {}
+
+                        @Override
+                        public void completed() {
+                            close();
+                        }
+
+                        @Override
+                        public void aborted() {
+                            close();
+                        }
+
+                        @Override
+                        public void failed() {
+                            close();
+                        }
+
+                        private void close() {
+                            try {
+                                outputStream.close();
+                            } catch (IOException ignored) {}
+                        }
+                    });
                     return null;
                 } catch (IOException | FTPIllegalReplyException | FTPException | FTPDataTransferException |
                          FTPAbortedException e) {
@@ -83,9 +112,11 @@ public class FtpResource implements ExternalResourceReadResponse {
 
         @Override
         public void close() throws IOException {
-            super.close();
-            inputStream.close();
-            release.run();
+            try {
+                inputStream.close();
+            } finally {
+                release.run();
+            }
         }
     }
 }

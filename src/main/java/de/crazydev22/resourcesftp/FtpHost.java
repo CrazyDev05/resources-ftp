@@ -13,7 +13,7 @@ public class FtpHost {
 
     public FtpHost(URI uri, PasswordCredentials credentials) {
         this.hostname = uri.getHost();
-        this.port = uri.getPort();
+        this.port = uri.getPort() == -1 ? 21 : uri.getPort();
         this.username = credentials != null ? credentials.getUsername() : null;
         this.password = credentials != null ? credentials.getPassword() : null;
         this.security = Security.fromURI(uri);
