@@ -1,12 +1,8 @@
 package de.crazydev22.resourcesftp;
 
-import it.sauronsoftware.ftp4j.FTPAbortedException;
-import it.sauronsoftware.ftp4j.FTPDataTransferException;
-import it.sauronsoftware.ftp4j.FTPException;
-import it.sauronsoftware.ftp4j.FTPIllegalReplyException;
+import it.sauronsoftware.ftp4j.*;
 import org.gradle.api.credentials.PasswordCredentials;
 import org.gradle.api.resources.ResourceException;
-import org.gradle.internal.resource.ResourceExceptions;
 import org.gradle.internal.resource.metadata.ExternalResourceMetaData;
 import org.gradle.internal.resource.transfer.ExternalResourceReadResponse;
 import org.jetbrains.annotations.NotNull;
@@ -19,7 +15,7 @@ public class FtpResource implements ExternalResourceReadResponse {
     private final PasswordCredentials credentials;
     private final ExternalResourceMetaData metaData;
     private final URI uri;
-    private LockableFtpClient client;
+    private FtpInputStream stream;
 
     public FtpResource(FtpClientFactory clientFactory, PasswordCredentials credentials,
                        ExternalResourceMetaData metaData, URI uri) {
@@ -32,20 +28,7 @@ public class FtpResource implements ExternalResourceReadResponse {
     @NotNull
     @Override
     public InputStream openStream() throws ResourceException {
-        client = clientFactory.createFtpClient(uri, credentials);
-        return client.run(ftpClient -> {
-            try {
-                PipedInputStream inputStream = new PipedInputStream();
-                PipedOutputStream outputStream = new PipedOutputStream(inputStream);
-
-                ftpClient.download(uri.getPath(), outputStream, 0, null);
-
-                return inputStream;
-            } catch (IOException | FTPIllegalReplyException | FTPException | FTPDataTransferException |
-                     FTPAbortedException e) {
-                throw new ResourceException(uri, "Could not download resource", e);
-            }
-        }, false);
+        return new FtpInputStream();
     }
 
     public URI getURI() {
@@ -64,8 +47,45 @@ public class FtpResource implements ExternalResourceReadResponse {
 
     @Override
     public void close() {
-        if (client != null) {
-            clientFactory.releaseFtpClient(client);
+        if (stream == null) return;
+
+        try {
+            stream.close();
+        } catch (IOException ignored) {}
+    }
+
+    private class FtpInputStream extends InputStream {
+        private final PipedInputStream inputStream = new PipedInputStream();
+        private final Runnable release;
+
+        private FtpInputStream() {
+            release = clientFactory
+                    .createFtpClient(uri, credentials)
+                    .runWithLock(ftpClient -> {
+                try {
+                    PipedOutputStream outputStream = new PipedOutputStream(inputStream);
+                    ftpClient.download(uri.getPath(), outputStream, 0, null);
+                    return null;
+                } catch (IOException | FTPIllegalReplyException | FTPException | FTPDataTransferException |
+                         FTPAbortedException e) {
+                    throw new ResourceException(uri, "Could not download resource", e);
+                }
+            });
+
+        }
+
+        @Override
+        public int read() throws IOException {
+            int i = inputStream.read();
+            if (i == -1) release.run();
+            return i;
+        }
+
+        @Override
+        public void close() throws IOException {
+            super.close();
+            inputStream.close();
+            release.run();
         }
     }
 }

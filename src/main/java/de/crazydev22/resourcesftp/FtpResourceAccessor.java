@@ -38,7 +38,7 @@ public class FtpResourceAccessor extends AbstractExternalResourceAccessor implem
                     return null;
                 throw new ResourceException(location.getUri(), "Could not get metadata for resource", e);
             }
-        }, true);
+        });
     }
 
     @Override

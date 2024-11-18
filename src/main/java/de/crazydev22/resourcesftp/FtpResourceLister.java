@@ -34,6 +34,6 @@ public class FtpResourceLister implements ExternalResourceLister {
                      FTPAbortedException | FTPListParseException e) {
                 throw new ResourceException(parent.getUri(), String.format("Could not list children for resource '%s'.", parent.getUri()), e);
             }
-        }, true);
+        });
     }
 }

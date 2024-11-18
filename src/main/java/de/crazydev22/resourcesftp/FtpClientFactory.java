@@ -19,7 +19,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @ThreadSafe
 @ServiceScope(Scope.Global.class)
@@ -97,7 +98,7 @@ public class FtpClientFactory implements Stoppable {
     private class DefaultLockableFtpClient implements LockableFtpClient {
         private final FtpHost host;
         private final FTPClient ftpClient;
-        private final ReentrantLock lock = new ReentrantLock(true);
+        private final Semaphore lock = new Semaphore(1, true);
 
         DefaultLockableFtpClient(FtpHost host, FTPClient ftpClient) {
             this.host = host;
@@ -115,15 +116,32 @@ public class FtpClientFactory implements Stoppable {
         }
 
         @Override
-        public <T> T run(FtpClientTask<T> task, boolean release) {
-            lock.lock();
+        public <T> T run(FtpClientTask<T> task) {
+            lock.acquireUninterruptibly();
             try {
                 return task.run(ftpClient);
             } finally {
-                lock.unlock();
-                if (release) {
+                lock.release();
+                FtpClientFactory.this.releaseFtpClient(this);
+            }
+        }
+
+        @Override
+        public <T> Runnable runWithLock(FtpClientTask<T> task) {
+            lock.acquireUninterruptibly();
+            try {
+                task.run(ftpClient);
+                AtomicBoolean done = new AtomicBoolean();
+                return () -> {
+                    if (!done.compareAndSet(false, true))
+                        return;
+                    lock.release();
                     FtpClientFactory.this.releaseFtpClient(this);
-                }
+                };
+            } catch (Throwable e) {
+                lock.release();
+                FtpClientFactory.this.releaseFtpClient(this);
+                throw e;
             }
         }
 

@@ -38,7 +38,7 @@ public class FtpResourceUploader implements ExternalResourceUploader {
                      FTPException e) {
                 throw ResourceExceptions.putFailed(destination.getUri(), e);
             }
-        }, true);
+        });
     }
 
     private void ensureParentDirectoryExists(FTPClient channel, URI uri) throws ResourceException {
